@@ -5,9 +5,9 @@ import * as jwt from 'jsonwebtoken'
 const saltRounds = 10
 
 export const register = async (req: Request, res: Response) => {
-  const { username, email, password, confirmPassword } = req.body
   try {
-    if (!username || !email || !password || !confirmPassword) {
+    const { email, password, confirmPassword, name } = req.body
+    if (!email || !password || !confirmPassword || !name) {
       return res.status(400).json({
         message: 'Wrong Input',
       })
@@ -20,19 +20,19 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds)
     const user = await prisma.user.create({
       data: {
-        username,
+        name,
         email,
         password: hashedPassword,
       },
     })
-    res.status(201).json(user)
+    return res.status(201).json(user)
   } catch (error: any) {
     if (error.code === 'P2002') {
       return res
         .status(400)
         .json({ message: 'Email or Username already exists', error: error })
     }
-    res.status(500).json({ message: 'Database Error', error: error })
+    return res.status(500).json({ message: 'Database Error', error: error })
   }
 }
 
@@ -42,14 +42,14 @@ export const getUser = async (req: Request, res: Response) => {
       select: {
         id: true,
         email: true,
-        password: true,
         updateAt: true,
         createAt: true,
+        lastOnline: true,
       },
     })
-    res.status(200).json(response)
+    return res.status(200).json(response)
   } catch (error) {
-    res.status(500).json({ message: 'Database Error', error: error })
+    return res.status(500).json({ message: 'Database Error', error: error })
   }
 }
 
@@ -87,9 +87,9 @@ export const updatePersonalData = async (req: Request, res: Response) => {
 }
 
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body
-  const JWT_SECRET = process.env.JWT_SECRET || 'key_of_mobile_app'
   try {
+    const { email, password } = req.body
+    const JWT_SECRET = process.env.JWT_SECRET || 'key_of_mobile_app'
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' })
@@ -110,7 +110,7 @@ export const login = async (req: Request, res: Response) => {
     return res.status(200).json({
       message: 'Login successful',
       token,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.email },
     })
   } catch (error) {
     return res.status(500).json({ message: 'Database Error', error: error })

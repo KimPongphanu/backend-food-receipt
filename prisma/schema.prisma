@@ -16,12 +16,11 @@ datasource db {
 
 model User {
   id       Int    @id @default(autoincrement())
-  username String @unique @db.VarChar(50)
   email    String @unique @db.VarChar(255)
   password String // เก็บ Password ที่ถูกเข้ารหัสแล้ว (Hash)
   name     String? @unique @db.VarChar(100) // ? ไว้ให้ค่อย update หลังจาก register เสร็จ
-  formulas  Formula[]
-  savedFormulas savedFormula[]
+  recipes  Recipe[]
+  savedRecipes SavedRecipe[]
 
   profileImage String? @db.Text
 
@@ -31,17 +30,36 @@ model User {
  
 }
 
-model Formula{
-  id Int @id @default(autoincrement())
-  author User @relation(fields: [authorId], references: [id])
-  authorId Int
-}
-
-model savedFormula{
+model SavedRecipe{
   id Int @id @default(autoincrement())
   title String 
   image String? @db.Text
   user User @relation(fields: [userId], references: [id])
   userId Int
+  recipe Recipe? @relation(fields: [recipeId], references: [id])
+  recipeId Int?
+}
 
+model Recipe{
+  id Int @id @default(autoincrement())
+  idMeal String @unique
+  strMeal String
+  strCategory String?
+  strArea String?
+  instructions String? 
+  thumbnail String? @db.Text
+  strYoutube String?
+  strSource String?
+  ingredients Ingredient[]
+  author User @relation(fields: [authorId], references: [id])
+  authorId Int
+  savedBy SavedRecipe[]
+}
+
+model Ingredient{
+  id Int @id @default(autoincrement())
+  name String
+  measure String
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId Int
 }

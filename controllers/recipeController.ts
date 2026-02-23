@@ -78,7 +78,7 @@ export const createRecipe = async (req: Request, res: Response) => {
       strSource,
       ingredients,
     } = req.body
-    const authorId = req.userId
+    const authorId = req.body.userId
     const newRecipe = await prisma.recipe.create({
       data: {
         idMeal,

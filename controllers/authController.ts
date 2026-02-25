@@ -25,7 +25,8 @@ export const register = async (req: Request, res: Response) => {
         password: hashedPassword,
       },
     })
-    return res.status(201).json(user)
+
+    return res.status(201).json({ email: user.email, name: user.name })
   } catch (error: any) {
     if (error.code === 'P2002') {
       return res

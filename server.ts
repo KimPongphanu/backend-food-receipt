@@ -1,6 +1,6 @@
 const express = require('express')
 const cors = require('cors')
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 import authRoute from './routes/authRouter'
 import recipeRoute from './routes/recipeRouter'

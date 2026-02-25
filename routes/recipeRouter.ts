@@ -1,14 +1,18 @@
 import { Router } from 'express'
 import { verifyToken } from '../middlewares/authMiddleware'
 import {
-  createRecipe,
+  createRecipes,
   getRecipes,
   getRecipeFromIdMeal,
+  saveRecipe,
+  deleteSavedRecipe,
 } from '../controllers/recipeController'
 const router = Router()
 
-router.post('/create', verifyToken, createRecipe)
+router.post('/create', /*verifyToken,*/ createRecipes)
 router.get('/get', getRecipes)
-router.get('/search/:id', getRecipeFromIdMeal)
+router.post('/saved-recipe', saveRecipe)
+router.delete('/saved-recipe/:recipeId', deleteSavedRecipe)
+router.get('/search/:idMeal', getRecipeFromIdMeal)
 
 export default router

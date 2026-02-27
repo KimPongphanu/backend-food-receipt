@@ -153,6 +153,30 @@ export const createRecipes = async (req: Request, res: Response) => {
   }
 }
 
+export const getSavedRecipe = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId || req.body.userId
+    const recipes = await prisma.recipe.findMany({
+      where: userId,
+      select: {
+        idMeal: true,
+        strMeal: true,
+        strCategory: true,
+        strArea: true,
+        strMealThumb: true,
+      },
+    })
+    if (recipes.length === 0) {
+      return res.status(200).json([])
+    }
+    return res.status(200).json(recipes)
+  } catch (error: any) {
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
+  }
+}
+
 export const saveRecipe = async (req: Request, res: Response) => {
   try {
     const userId = Number((req as any).userId || 9)

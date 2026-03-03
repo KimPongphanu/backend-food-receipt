@@ -105,7 +105,7 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
       },
       JWT_SECRET,
-      { expiresIn: '1d' },
+      { expiresIn: '2m' },
     )
 
     return res.status(200).json({

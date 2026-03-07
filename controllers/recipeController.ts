@@ -177,49 +177,37 @@ export const getSavedRecipe = async (req: Request, res: Response) => {
   }
 }
 
+// recipeController.ts
 export const saveRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = Number((req as any).userId) // ใช้จาก Token
-    const { idMeal } = req.body // รับ idMeal ไม่ใช่ recipeId
+    const rawUserId = (req as any).userId
+    if (!rawUserId) return res.status(401).json({ message: 'Unauthorized' })
 
-    if (!idMeal) {
-      return res.status(400).json({ message: 'idMeal is required' })
-    }
+    const userId = Number(rawUserId)
+    const { idMeal } = req.body // รับ idMeal มาจาก Body
 
-    // หา id จริงๆ ของ Recipe ใน Database ก่อน
+    if (!idMeal) return res.status(400).json({ message: 'idMeal is required' })
+
     const recipe = await prisma.recipe.findUnique({
       where: { idMeal: String(idMeal) },
     })
-    if (!recipe) {
-      return res.status(404).json({ message: 'Recipe not found in database' })
-    }
 
-    const existingSaved = await prisma.savedRecipe.findFirst({
-      where: {
-        userId: userId,
-        recipeId: recipe.id,
-      },
-    })
-
-    if (existingSaved) {
-      return res.status(400).json({ message: 'Recipe already saved' })
-    }
+    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
 
     const savedRecipe = await prisma.savedRecipe.create({
       data: {
+        idMeal: String(idMeal), // ✅ เพิ่มบรรทัดนี้เพื่อแก้ Error ในรูปภาพ!
         user: { connect: { id: userId } },
         recipe: { connect: { id: recipe.id } },
       },
+      include: { recipe: true },
     })
 
     return res
       .status(201)
-      .json({ message: 'Recipe saved successfully', data: savedRecipe })
+      .json({ message: 'Saved successfully', data: savedRecipe })
   } catch (error: any) {
-    console.error('Save Recipe Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Error', error: error.message })
   }
 }
 

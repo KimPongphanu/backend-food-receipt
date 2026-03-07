@@ -1,5 +1,6 @@
 node_modules
 # Keep environment variables out of version control
 .env.keys
-
+.env
+decrypted_env.txt
 /generated/prisma

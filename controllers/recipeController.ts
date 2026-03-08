@@ -40,7 +40,8 @@ export const getRecipes = async (req: Request, res: Response) => {
     }
 
     const recipes = await prisma.recipe.findMany({
-      where: Object.keys(whereCondition).length > 0 ? whereCondition : undefined,
+      where:
+        Object.keys(whereCondition).length > 0 ? whereCondition : undefined,
       select: {
         idMeal: true,
         strMeal: true,
@@ -63,7 +64,9 @@ export const getRecipes = async (req: Request, res: Response) => {
 
     return res.status(200).json(recipes)
   } catch (error: any) {
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -87,7 +90,9 @@ export const getRecipeFromIdMeal = async (req: Request, res: Response) => {
     return res.status(200).json(recipe)
   } catch (error: any) {
     console.error('FindUnique Error:', error.message)
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -98,8 +103,8 @@ export const createRecipes = async (req: Request, res: Response) => {
     const rawData = req.body.data
       ? JSON.parse(req.body.data)
       : Array.isArray(req.body)
-      ? req.body
-      : [req.body]
+        ? req.body
+        : [req.body]
     console.log('RAW DATA:', JSON.stringify(rawData))
 
     const authorId = Number((req as any).userId)
@@ -117,7 +122,9 @@ export const createRecipes = async (req: Request, res: Response) => {
     const finalData = dedupedData.filter((d: any) => !existingIds.has(d.idMeal))
 
     if (finalData.length === 0) {
-      return res.status(400).json({ message: 'All recipes already exist or no data provided' })
+      return res
+        .status(400)
+        .json({ message: 'All recipes already exist or no data provided' })
     }
 
     const result = await prisma.$transaction(
@@ -148,7 +155,9 @@ export const createRecipes = async (req: Request, res: Response) => {
     })
   } catch (error: any) {
     console.error('Bulk Create Error:', JSON.stringify(error, null, 2))
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -168,7 +177,9 @@ export const getSavedRecipe = async (req: Request, res: Response) => {
     const recipes = savedRecipes.map((saved) => saved.recipe)
     return res.status(200).json(recipes)
   } catch (error: any) {
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -181,7 +192,9 @@ export const saveRecipe = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'idMeal is required' })
     }
 
-    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    const recipe = await prisma.recipe.findUnique({
+      where: { idMeal: String(idMeal) },
+    })
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found in database' })
     }
@@ -198,11 +211,14 @@ export const saveRecipe = async (req: Request, res: Response) => {
       data: {
         user: { connect: { id: userId } },
         recipe: { connect: { id: recipe.id } },
+        idMeal: idMeal,
       },
       include: { recipe: true },
     })
 
-    return res.status(201).json({ message: 'Saved successfully', data: savedRecipe })
+    return res
+      .status(201)
+      .json({ message: 'Saved successfully', data: savedRecipe })
   } catch (error: any) {
     return res.status(500).json({ message: 'Error', error: error.message })
   }
@@ -217,7 +233,9 @@ export const deleteSavedRecipe = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'idMeal is required!' })
     }
 
-    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    const recipe = await prisma.recipe.findUnique({
+      where: { idMeal: String(idMeal) },
+    })
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found' })
     }
@@ -227,13 +245,17 @@ export const deleteSavedRecipe = async (req: Request, res: Response) => {
     })
 
     if (response.count === 0) {
-      return res.status(404).json({ message: 'Saved recipe not found or already deleted!' })
+      return res
+        .status(404)
+        .json({ message: 'Saved recipe not found or already deleted!' })
     }
 
     return res.status(200).json({ message: 'Unsaved successfully!' })
   } catch (error: any) {
     console.error('Delete Saved Recipe Error:', error.message)
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -254,7 +276,9 @@ export const getCategories = async (req: Request, res: Response) => {
     return res.status(200).json({ categories: formattedCategories })
   } catch (error: any) {
     console.error('Get Categories Error:', error.message)
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -275,7 +299,9 @@ export const getMyRecipes = async (req: Request, res: Response) => {
     })
     return res.status(200).json(recipes)
   } catch (error: any) {
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -283,22 +309,44 @@ export const updateRecipe = async (req: Request, res: Response) => {
   try {
     const authorId = Number((req as any).userId)
     const { idMeal } = req.params
-    const { strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube, ingredients } = req.body
+    const {
+      strMeal,
+      strCategory,
+      strArea,
+      strInstructions,
+      strMealThumb,
+      strYoutube,
+      ingredients,
+    } = req.body
 
-    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    const recipe = await prisma.recipe.findUnique({
+      where: { idMeal: String(idMeal) },
+    })
     if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
-    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+    if (recipe.authorId !== authorId)
+      return res.status(403).json({ message: 'Forbidden' })
 
     const updated = await prisma.recipe.update({
       where: { idMeal: String(idMeal) },
       data: {
-        strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube,
-        ingredients: ingredients ? { deleteMany: {}, create: ingredients } : undefined,
+        strMeal,
+        strCategory,
+        strArea,
+        strInstructions,
+        strMealThumb,
+        strYoutube,
+        ingredients: ingredients
+          ? { deleteMany: {}, create: ingredients }
+          : undefined,
       },
     })
-    return res.status(200).json({ message: 'Updated successfully', data: updated })
+    return res
+      .status(200)
+      .json({ message: 'Updated successfully', data: updated })
   } catch (error: any) {
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -307,13 +355,18 @@ export const deleteRecipe = async (req: Request, res: Response) => {
     const authorId = Number((req as any).userId)
     const { idMeal } = req.params
 
-    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    const recipe = await prisma.recipe.findUnique({
+      where: { idMeal: String(idMeal) },
+    })
     if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
-    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+    if (recipe.authorId !== authorId)
+      return res.status(403).json({ message: 'Forbidden' })
 
     await prisma.recipe.delete({ where: { idMeal: String(idMeal) } })
     return res.status(200).json({ message: 'Deleted successfully' })
   } catch (error: any) {
-    return res.status(500).json({ message: 'Database Error', error: error.message })
+    return res
+      .status(500)
+      .json({ message: 'Database Error', error: error.message })
   }
 }

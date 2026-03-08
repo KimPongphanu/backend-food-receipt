@@ -33,18 +33,14 @@ model User {
 model SavedRecipe {
   id       Int     @id @default(autoincrement())
   
-  // ความสัมพันธ์กับ User
   user     User    @relation(fields: [userId], references: [id])
   userId   Int
   
-  // ความสัมพันธ์กับ Recipe (แนะนำให้เอา ? ออก เพราะรายการเซฟต้องมีเมนูเสมอ)
   recipe   Recipe  @relation(fields: [recipeId], references: [id])
   recipeId Int
   
-  // เพิ่มชนิดข้อมูลเป็น String ตามที่ใช้ใน Recipe model
-  idMeal   String
+  idMeal   String?
 
-  // แนะนำให้เพิ่ม Unique Constraint เพื่อป้องกันการเซฟเมนูซ้ำโดยคนเดิม
   @@unique([userId, recipeId])
 }
 model Recipe{

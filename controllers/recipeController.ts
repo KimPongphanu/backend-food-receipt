@@ -99,8 +99,13 @@ export const getRecipeFromIdMeal = async (req: Request, res: Response) => {
 
 export const createRecipes = async (req: Request, res: Response) => {
   try {
-    const rawData = Array.isArray(req.body) ? req.body : [req.body]
-    const authorId = Number((req as any).userId || req.body.userId || 9)
+    // recipeController.ts
+    console.log('BODY:', JSON.stringify(req.body))  // เพิ่ม
+    console.log('FILE:', req.file)  
+    const rawData = req.body.data ? JSON.parse(req.body.data)  // มาจาก multipart field
+                    : Array.isArray(req.body) ? req.body : [req.body] // มาจาก JSON body เดิม
+    console.log('RAW DATA:', JSON.stringify(rawData))
+    const authorId = Number((req as any).userId) // เอา || 1 ออก ใช้จาก Token เท่านั้น
 
     const uniqueInput = new Map()
     rawData.forEach((item) => uniqueInput.set(item.idMeal, item))
@@ -128,10 +133,10 @@ export const createRecipes = async (req: Request, res: Response) => {
             strCategory: data.strCategory,
             strArea: data.strArea,
             strInstructions: data.strInstructions,
-            strMealThumb: data.strMealThumb,
+            strMealThumb: req.file?.path || data.strMealThumb || null,
             strYoutube: data.strYoutube,
             strSource: data.strSource,
-            author: { connect: { id: authorId || 9 } },
+            author: { connect: { id: authorId } },
             ingredients: {
               create: data.ingredients, // Nested Create ทำงานที่นี่
             },
@@ -146,29 +151,29 @@ export const createRecipes = async (req: Request, res: Response) => {
       data: result,
     })
   } catch (error: any) {
-    console.error('Bulk Create Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
-  }
+  console.error('Bulk Create Error:', JSON.stringify(error, null, 2)) // แก้ตรงนี้
+  return res
+    .status(500)
+    .json({ message: 'Database Error', error: error.message })
+}
 }
 
 export const getSavedRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = req.userId || req.body.userId
-    const recipes = await prisma.recipe.findMany({
-      where: userId,
-      select: {
-        idMeal: true,
-        strMeal: true,
-        strCategory: true,
-        strArea: true,
-        strMealThumb: true,
-      },
+    const userId = Number((req as any).userId) // ใช้จาก Token
+
+    // ไปหาในตาราง SavedRecipe แล้ว Include ข้อมูล Recipe กลับมา
+    const savedRecipes = await prisma.savedRecipe.findMany({
+      where: { userId: userId },
+      include: { recipe: true },
     })
-    if (recipes.length === 0) {
+
+    if (savedRecipes.length === 0) {
       return res.status(200).json([])
     }
+
+    // แกะเฉพาะ Object ข้อมูลอาหารส่งออกไป
+    const recipes = savedRecipes.map((saved) => saved.recipe)
     return res.status(200).json(recipes)
   } catch (error: any) {
     return res
@@ -179,17 +184,23 @@ export const getSavedRecipe = async (req: Request, res: Response) => {
 
 export const saveRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = Number((req as any).userId || 9)
-    const { recipeId } = req.body
+    const userId = Number((req as any).userId) // ใช้จาก Token
+    const { idMeal } = req.body // รับ idMeal ไม่ใช่ recipeId
 
-    if (!recipeId) {
-      return res.status(400).json({ message: 'recipeId is required' })
+    if (!idMeal) {
+      return res.status(400).json({ message: 'idMeal is required' })
+    }
+
+    // หา id จริงๆ ของ Recipe ใน Database ก่อน
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found in database' })
     }
 
     const existingSaved = await prisma.savedRecipe.findFirst({
       where: {
         userId: userId,
-        recipeId: Number(recipeId),
+        recipeId: recipe.id,
       },
     })
 
@@ -200,7 +211,7 @@ export const saveRecipe = async (req: Request, res: Response) => {
     const savedRecipe = await prisma.savedRecipe.create({
       data: {
         user: { connect: { id: userId } },
-        recipe: { connect: { id: Number(recipeId) } },
+        recipe: { connect: { id: recipe.id } },
       },
     })
 
@@ -217,17 +228,22 @@ export const saveRecipe = async (req: Request, res: Response) => {
 
 export const deleteSavedRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = Number((req as any).userId || 9)
-    const { recipeId } = req.params
+    const userId = Number((req as any).userId) // ใช้จาก Token
+    const { idMeal } = req.params // รับ idMeal จาก URL ไม่ใช่ recipeId
 
-    if (!recipeId) {
-      return res.status(400).json({ message: 'recipeId is required!' })
+    if (!idMeal) {
+      return res.status(400).json({ message: 'idMeal is required!' })
+    }
+
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found' })
     }
 
     const response = await prisma.savedRecipe.deleteMany({
       where: {
         userId: userId,
-        recipeId: Number(recipeId),
+        recipeId: recipe.id,
       },
     })
 
@@ -243,5 +259,102 @@ export const deleteSavedRecipe = async (req: Request, res: Response) => {
     return res
       .status(500)
       .json({ message: 'Database Error', error: error.message })
+  }
+}
+
+// ====================== เพิ่มมาใหม่ใช้ดึง category อาหาร ==========================
+export const getCategories = async (req: Request, res: Response) => {
+  try {
+    const categoryCounts = await prisma.recipe.groupBy({
+      by: ['strCategory'],
+      _count: {
+        strCategory: true,
+      },
+      where: { 
+        strCategory: { not: null }
+      },
+      orderBy: {
+        _count: {
+          strCategory: 'desc',
+        },
+      },
+    })
+    
+    const formattedCategories = categoryCounts.map(c => ({
+      name: c.strCategory,
+      count: c._count.strCategory,
+    }))
+    
+    return res.status(200).json({ categories: formattedCategories })
+  } catch (error: any) {
+    console.error('Get Categories Error:', error.message)
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }}
+
+// ดึงเฉพาะ recipe ที่ user คนนี้สร้าง
+export const getMyRecipes = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+    
+    const recipes = await prisma.recipe.findMany({
+      where: { 
+        authorId: authorId, 
+        NOT: { authorId: null } 
+      },
+      select: {
+        idMeal: true, strMeal: true, strCategory: true,
+        strArea: true, strMealThumb: true,
+        author: { select: { id: true, name: true, profileImage: true } },
+      },
+    })
+    return res.status(200).json(recipes)
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }
+}
+
+// แก้ไข recipe (เฉพาะเจ้าของ)
+export const updateRecipe = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+    const { idMeal } = req.params
+    const { strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube, ingredients } = req.body
+
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
+    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+
+    const updated = await prisma.recipe.update({
+      where: { idMeal: String(idMeal) },
+      data: {
+        strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube,
+        ingredients: ingredients ? {
+          deleteMany: {}, // ลบ ingredients เก่าออก
+          create: ingredients, // สร้างใหม่
+        } : undefined,
+      },
+    })
+    return res.status(200).json({ message: 'Updated successfully', data: updated })
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }
+}
+  
+
+
+// ลบ recipe (เฉพาะเจ้าของ)
+export const deleteRecipe = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+    const { idMeal } = req.params
+
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
+    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+
+    await prisma.recipe.delete({ where: { idMeal: String(idMeal) } })
+    return res.status(200).json({ message: 'Deleted successfully' })
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }

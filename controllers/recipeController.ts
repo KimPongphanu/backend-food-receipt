@@ -22,9 +22,8 @@ const recipeSelectFields = {
 
 export const getRecipes = async (req: Request, res: Response) => {
   try {
-    const { q, c } = req.query // q = search {meal, category}, c = category ใช้ได้ 3 feature ถ้าไม่รับมาก็ getAll
+    const { q, c } = req.query
 
-    // สร้างเงื่อนไข Query แบบ Dynamic
     let whereCondition: any = {}
 
     if (q) {
@@ -41,8 +40,7 @@ export const getRecipes = async (req: Request, res: Response) => {
     }
 
     const recipes = await prisma.recipe.findMany({
-      where:
-        Object.keys(whereCondition).length > 0 ? whereCondition : undefined,
+      where: Object.keys(whereCondition).length > 0 ? whereCondition : undefined,
       select: {
         idMeal: true,
         strMeal: true,
@@ -65,9 +63,7 @@ export const getRecipes = async (req: Request, res: Response) => {
 
     return res.status(200).json(recipes)
   } catch (error: any) {
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
 
@@ -91,36 +87,41 @@ export const getRecipeFromIdMeal = async (req: Request, res: Response) => {
     return res.status(200).json(recipe)
   } catch (error: any) {
     console.error('FindUnique Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
 
 export const createRecipes = async (req: Request, res: Response) => {
   try {
-    const rawData = Array.isArray(req.body) ? req.body : [req.body]
-    const authorId = Number((req as any).userId) // เอา || 1 ออก ใช้จาก Token เท่านั้น
+    console.log('BODY:', JSON.stringify(req.body))
+    console.log('FILE:', req.file)
+    const rawData = req.body.data
+      ? JSON.parse(req.body.data)
+      : Array.isArray(req.body)
+      ? req.body
+      : [req.body]
+    console.log('RAW DATA:', JSON.stringify(rawData))
+
+    const authorId = Number((req as any).userId)
 
     const uniqueInput = new Map()
-    rawData.forEach((item) => uniqueInput.set(item.idMeal, item))
+    rawData.forEach((item: any) => uniqueInput.set(item.idMeal, item))
     const dedupedData = Array.from(uniqueInput.values())
 
     const existingMeals = await prisma.recipe.findMany({
-      where: { idMeal: { in: dedupedData.map((d) => d.idMeal) } },
+      where: { idMeal: { in: dedupedData.map((d: any) => d.idMeal) } },
       select: { idMeal: true },
     })
     const existingIds = new Set(existingMeals.map((m) => m.idMeal))
 
-    const finalData = dedupedData.filter((d) => !existingIds.has(d.idMeal))
+    const finalData = dedupedData.filter((d: any) => !existingIds.has(d.idMeal))
 
     if (finalData.length === 0) {
-      return res
-        .status(400)
-        .json({ message: 'All recipes already exist or no data provided' })
+      return res.status(400).json({ message: 'All recipes already exist or no data provided' })
     }
+
     const result = await prisma.$transaction(
-      finalData.map((data) =>
+      finalData.map((data: any) =>
         prisma.recipe.create({
           data: {
             idMeal: data.idMeal,
@@ -128,12 +129,12 @@ export const createRecipes = async (req: Request, res: Response) => {
             strCategory: data.strCategory,
             strArea: data.strArea,
             strInstructions: data.strInstructions,
-            strMealThumb: data.strMealThumb,
+            strMealThumb: req.file?.path || data.strMealThumb || null,
             strYoutube: data.strYoutube,
             strSource: data.strSource,
             author: { connect: { id: authorId } },
             ingredients: {
-              create: data.ingredients, // Nested Create ทำงานที่นี่
+              create: data.ingredients,
             },
           },
           include: { ingredients: true },
@@ -146,18 +147,15 @@ export const createRecipes = async (req: Request, res: Response) => {
       data: result,
     })
   } catch (error: any) {
-    console.error('Bulk Create Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    console.error('Bulk Create Error:', JSON.stringify(error, null, 2))
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
 
 export const getSavedRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = Number((req as any).userId) // ใช้จาก Token
+    const userId = Number((req as any).userId)
 
-    // ไปหาในตาราง SavedRecipe แล้ว Include ข้อมูล Recipe กลับมา
     const savedRecipes = await prisma.savedRecipe.findMany({
       where: { userId: userId },
       include: { recipe: true },
@@ -167,45 +165,44 @@ export const getSavedRecipe = async (req: Request, res: Response) => {
       return res.status(200).json([])
     }
 
-    // แกะเฉพาะ Object ข้อมูลอาหารส่งออกไป
     const recipes = savedRecipes.map((saved) => saved.recipe)
     return res.status(200).json(recipes)
   } catch (error: any) {
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
 
-// recipeController.ts
 export const saveRecipe = async (req: Request, res: Response) => {
   try {
-    const rawUserId = (req as any).userId
-    if (!rawUserId) return res.status(401).json({ message: 'Unauthorized' })
+    const userId = Number((req as any).userId)
+    const { idMeal } = req.body
 
-    const userId = Number(rawUserId)
-    const { idMeal } = req.body // รับ idMeal มาจาก Body
+    if (!idMeal) {
+      return res.status(400).json({ message: 'idMeal is required' })
+    }
 
-    if (!idMeal) return res.status(400).json({ message: 'idMeal is required' })
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found in database' })
+    }
 
-    const recipe = await prisma.recipe.findUnique({
-      where: { idMeal: String(idMeal) },
+    const existingSaved = await prisma.savedRecipe.findFirst({
+      where: { userId: userId, recipeId: recipe.id },
     })
 
-    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
+    if (existingSaved) {
+      return res.status(400).json({ message: 'Recipe already saved' })
+    }
 
     const savedRecipe = await prisma.savedRecipe.create({
       data: {
-        idMeal: String(idMeal), // ✅ เพิ่มบรรทัดนี้เพื่อแก้ Error ในรูปภาพ!
         user: { connect: { id: userId } },
         recipe: { connect: { id: recipe.id } },
       },
       include: { recipe: true },
     })
 
-    return res
-      .status(201)
-      .json({ message: 'Saved successfully', data: savedRecipe })
+    return res.status(201).json({ message: 'Saved successfully', data: savedRecipe })
   } catch (error: any) {
     return res.status(500).json({ message: 'Error', error: error.message })
   }
@@ -213,58 +210,40 @@ export const saveRecipe = async (req: Request, res: Response) => {
 
 export const deleteSavedRecipe = async (req: Request, res: Response) => {
   try {
-    const userId = Number((req as any).userId) // ใช้จาก Token
-    const { idMeal } = req.params // รับ idMeal จาก URL ไม่ใช่ recipeId
+    const userId = Number((req as any).userId)
+    const { idMeal } = req.params
 
     if (!idMeal) {
       return res.status(400).json({ message: 'idMeal is required!' })
     }
 
-    const recipe = await prisma.recipe.findUnique({
-      where: { idMeal: String(idMeal) },
-    })
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found' })
     }
 
     const response = await prisma.savedRecipe.deleteMany({
-      where: {
-        userId: userId,
-        recipeId: recipe.id,
-      },
+      where: { userId: userId, recipeId: recipe.id },
     })
 
     if (response.count === 0) {
-      return res
-        .status(404)
-        .json({ message: 'Saved recipe not found or already deleted!' })
+      return res.status(404).json({ message: 'Saved recipe not found or already deleted!' })
     }
 
     return res.status(200).json({ message: 'Unsaved successfully!' })
   } catch (error: any) {
     console.error('Delete Saved Recipe Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
 
-// ====================== เพิ่มมาใหม่ใช้ดึง category อาหาร ==========================
 export const getCategories = async (req: Request, res: Response) => {
   try {
     const categoryCounts = await prisma.recipe.groupBy({
       by: ['strCategory'],
-      _count: {
-        strCategory: true,
-      },
-      where: {
-        strCategory: { not: null },
-      },
-      orderBy: {
-        _count: {
-          strCategory: 'desc',
-        },
-      },
+      _count: { strCategory: true },
+      where: { strCategory: { not: null } },
+      orderBy: { _count: { strCategory: 'desc' } },
     })
 
     const formattedCategories = categoryCounts.map((c) => ({
@@ -275,8 +254,66 @@ export const getCategories = async (req: Request, res: Response) => {
     return res.status(200).json({ categories: formattedCategories })
   } catch (error: any) {
     console.error('Get Categories Error:', error.message)
-    return res
-      .status(500)
-      .json({ message: 'Database Error', error: error.message })
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }
+}
+
+export const getMyRecipes = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+
+    const recipes = await prisma.recipe.findMany({
+      where: { authorId: authorId, NOT: { authorId: null } },
+      select: {
+        idMeal: true,
+        strMeal: true,
+        strCategory: true,
+        strArea: true,
+        strMealThumb: true,
+        author: { select: { id: true, name: true, profileImage: true } },
+      },
+    })
+    return res.status(200).json(recipes)
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }
+}
+
+export const updateRecipe = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+    const { idMeal } = req.params
+    const { strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube, ingredients } = req.body
+
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
+    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+
+    const updated = await prisma.recipe.update({
+      where: { idMeal: String(idMeal) },
+      data: {
+        strMeal, strCategory, strArea, strInstructions, strMealThumb, strYoutube,
+        ingredients: ingredients ? { deleteMany: {}, create: ingredients } : undefined,
+      },
+    })
+    return res.status(200).json({ message: 'Updated successfully', data: updated })
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
+  }
+}
+
+export const deleteRecipe = async (req: Request, res: Response) => {
+  try {
+    const authorId = Number((req as any).userId)
+    const { idMeal } = req.params
+
+    const recipe = await prisma.recipe.findUnique({ where: { idMeal: String(idMeal) } })
+    if (!recipe) return res.status(404).json({ message: 'Recipe not found' })
+    if (recipe.authorId !== authorId) return res.status(403).json({ message: 'Forbidden' })
+
+    await prisma.recipe.delete({ where: { idMeal: String(idMeal) } })
+    return res.status(200).json({ message: 'Deleted successfully' })
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Database Error', error: error.message })
   }
 }
